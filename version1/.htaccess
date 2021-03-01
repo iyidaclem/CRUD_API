@@ -1,0 +1,10 @@
+php_flag display_errors on
+
+RewriteEngine On    # Turn on the rewriting engine
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+
+RewriteRule ^tasks/([0-9]+)$ controller/tasks.php?taskid=$1 [L]
+
+RewriteRule ^tasks/complete$ controller/tasks.php?completed=Y [L]
+RewriteRule ^tasks/imcomplete$ controller/tasks.php?completed=N [L]
