@@ -377,19 +377,31 @@ elseif(empty($_GET)){
       $completed = $newTask->getComplete();
 
       $query = $writeDB->prepare('insert into table_tasks (title, descript, deadline, completed) 
-                values(:title, :descript, :STR_TO_DATE(deadline, "%d/%m/%Y %H:%i"), :completed)');
+                values(:title, :descript, STR_TO_DATE(:deadline, \'%d/%m/%Y %H:%i\'), :completed)');
       $query->bindParam(':title', $title, PDO::PARAM_STR);
       $query->bindParam(':descript', $description, PDO::PARAM_STR);
       $query->bindParam(':deadline', $deadline, PDO::PARAM_STR);
       $query->bindParam(':completed', $completed, PDO::PARAM_STR);
+      $query->execute();
 
       $rowCount = $query->rowCount();
+      // try{
+      //   if($rowCount === 0){
+      //     $response = new Response();
+      //     $response->setHttpStatuseCode(400);
+      //     $response->setSuccess(false);
+      //     $response->addMessage("Failed to create tasks");
+      //     $response->send();
+      //     exit();
+      //   }
+      // }catch(){
 
+      // }
       if($rowCount === 0){
         $response = new Response();
         $response->setHttpStatuseCode(400);
         $response->setSuccess(false);
-        $response->addMessage($ex->getMessage());
+        $response->addMessage("Failed to create tasks");
         $response->send();
         exit();
       }
