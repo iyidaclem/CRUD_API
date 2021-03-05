@@ -69,16 +69,20 @@ if(strlen($jsonData->fullname)<3 || strlen($jsonData->fullname)>255 ||
   $jsonData->fullname<3 ? $response->addMessage("Fullname is too short"):false;
   $jsonData->fullname>255 ? $response->addMessage("Fullname is too too long"):false;
   $jsonData->username < 6 ? $response->addMessage("username not supplied"):false;
-  $jsonData->username > 12 ? $response->addMessage("Username cannot exceed 12 characters"):false;
+  $jsonData->username > 255 ? $response->addMessage("Username cannot exceed 12 characters"):false;
   $jsonData->password < 6? $response->addMessage("password not supplied"):false;
-  $jsonData->password > 12? $response->addMessage("password cannot exceed 12 characters"):false;
+  $jsonData->password > 255? $response->addMessage("password cannot exceed 12 characters"):false;
   $response->send();
   exit(); 
 }
 
+$fullname = trim($jsonData->fullname);
+$username = trim($jsonData->username);
+$password = $jsonData->password;
+
 try{
   $query = $writeDB->prepare('SELECT id from table_users where username=:username');
-  $query->bindParam(':username', $jsonData->username, PDO::PARAM_STR);
+  $query->bindParam(':username', $username, PDO::PARAM_STR);
   $query->execute();
 
   $rowCount = $query->rowCount();
@@ -92,9 +96,9 @@ try{
     exit();
   }
 
-  $hash_password = password_hash($password, PASSWORD_DEFAULT);
+  $hash_password = password_hash($jsonData->password, PASSWORD_DEFAULT);
   
-  $query = $writeDB->prepare('insert into table_users (fullname, username, password) values(:fullname, :username, :password)');
+  $query = $writeDB->prepare('INSERT into table_users (fullname, username, password) values (:fullname, :username, :password)');
   $query->bindParam(':fullname', $fullname, PDO::PARAM_STR);
   $query->bindParam(':username', $username, PDO::PARAM_STR);
   $query->bindParam(':password', $password, PDO::PARAM_STR);
@@ -110,6 +114,19 @@ try{
     $response->send();
     exit();
   }
+  $lastUserId = $writeDB->lastInsertId();
+
+  $returnData = array();
+  $returnData['user_id'] = $lastUserId;
+  $returnData['fullname'] = $jsonData->fullname;
+  $returnData['username'] = $jsonData->username;
+
+  $response = new Response();
+  $response->setHttpStatuseCode(201);
+  $response->setSuccess(true);
+  $response->addMessage("User created");
+  $response->send();
+  exit();
 
 
 }catch(PDOException $ex){
@@ -117,7 +134,7 @@ try{
   $response = new Response();
   $response->setHttpStatuseCode(500);
   $response->setSuccess(false);
-  $response->addMessage("There was an issue greating a user account. Please try again".$ex->getMessage());
+  $response->addMessage("There was an issue creating a user account. Please try again".$ex->getMessage());
   $response->send();
   exit();
 }
