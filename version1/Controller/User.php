@@ -96,12 +96,12 @@ try{
     exit();
   }
 
-  $hash_password = password_hash($jsonData->password, PASSWORD_DEFAULT);
+  $hash_password = password_hash($password, PASSWORD_DEFAULT);
   
   $query = $writeDB->prepare('INSERT into table_users (fullname, username, password) values (:fullname, :username, :password)');
   $query->bindParam(':fullname', $fullname, PDO::PARAM_STR);
   $query->bindParam(':username', $username, PDO::PARAM_STR);
-  $query->bindParam(':password', $password, PDO::PARAM_STR);
+  $query->bindParam(':password', $hash_password, PDO::PARAM_STR);
   $query->execute();
 
   $rowCount = $query->rowCount();
@@ -125,6 +125,7 @@ try{
   $response->setHttpStatuseCode(201);
   $response->setSuccess(true);
   $response->addMessage("User created");
+  $response->setData($returnData);
   $response->send();
   exit();
 

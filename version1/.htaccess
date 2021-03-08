@@ -12,3 +12,5 @@ RewriteRule    ^tasks$    controller/tasks.php  [L]    # Handle task requests
 
 
 RewriteRule ^users$ controller/user.php [L]
+
+RewriteRule ^sessions$ controller/sessionsController.php [L]
