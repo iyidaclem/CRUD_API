@@ -16,6 +16,75 @@ try{
 
 if(array_key_exists("sesionid", $_GET)){
 
+  $sessionID = $_GET['sessionid'];
+  if($sessionID === '' || !is_numeric($sessionID)){
+    $response = new Response();
+    $response->setHttpStatuseCode(400);
+    $response->setSuccess(false);
+    ($sessionID === ''? $response->addMessage("Session ID cannot be blank."):false);
+    (!is_numeric($sessionID) ? $response->addMessage("Session ID must be numeric"): false);
+    $response->send();
+  }
+
+  if(!isset($_SERVER['HTTP_AUTHORIZATION']) || strlen($_SERVER['HTTP_AUTHORIZATION'])<1){
+    $response = new Response();
+    $response->setHttpStatuseCode(401);
+    $response->setSuccess(false);
+    (!isset($_SERVER['HTTP_AUTHORIZATION'])? $response->addMessage("Access token is missing from the header."):false);
+    (strlen($_SERVER['HTTP_AUTHORIZATION'])<1 ? $response->addMessage("The authorization token used is invalid."): false);
+    $response->send();
+  }
+
+  $accesstoken = $_SERVER['HTTP_AUTHORIZATION'];
+
+  if($_SERVER['REQUEST_METHOD']==='DELETE'){
+
+    try{
+      $query = $writeDB->prepare('delete from table_sessions where id= :sessionid and accesstoken = :accesstoken');
+      $query->bindParam(':sessionid', $sessionID, PDO::PARAM_INT);
+      $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
+      $query->execute();
+
+      $rowCount = $query->rowCount();
+
+      if($rowCount === 0){
+        $response = new Response();
+        $response->setHttpStatuseCode(500);
+        $response->setSuccess(false);
+        $response->addMessage("Failed to log out session using the access token provided.");
+        $response->send();
+      }
+
+      $returnData = array();
+      $returnData['session_id'] = intval($sessionID);
+
+      $response = new Response();
+      //$response->setHttpStatuseCode(200);
+      $response->setSuccess(True);
+      $response->addMessage("Successfully logged out.");
+      $response->setData($returnData);
+      $response->send();
+
+    }catch(PDOException $ex){
+      $response = new Response();
+      $response->setHttpStatuseCode(500);
+      $response->setSuccess(false);
+      $response->addMessage("There was a problem loggin out, please try again.");
+      $response->send();
+    }
+
+  }elseif($_SERVER['REQUEST_METHOD'] === 'PATCH'){
+
+  }else{
+    $response = new Response();
+    $response->setHttpStatuseCode(404);
+    $response->setSuccess(false);
+    $response->addMessage("Endpoint not found.");
+    $response->send();
+  }
+
+
+ 
 }elseif(empty($_GET)){
 
   if($_SERVER['REQUEST_METHOD'] !== 'POST'){
