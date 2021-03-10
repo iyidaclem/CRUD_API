@@ -14,10 +14,11 @@ try{
   $response->send();
 }
 
-if(array_key_exists("sesionid", $_GET)){
+if(array_key_exists("sessionid", $_GET)){
 
   $sessionID = $_GET['sessionid'];
-  if($sessionID === '' || !is_numeric($sessionID)){
+
+  if($sessionID == '' || !is_numeric($sessionID)){
     $response = new Response();
     $response->setHttpStatuseCode(400);
     $response->setSuccess(false);
@@ -26,21 +27,23 @@ if(array_key_exists("sesionid", $_GET)){
     $response->send();
   }
 
-  if(!isset($_SERVER['HTTP_AUTHORIZATION']) || strlen($_SERVER['HTTP_AUTHORIZATION'])<1){
+  if(!isset($_SERVER['HTTP_AUTHORIZATION']) || strlen($_SERVER['HTTP_AUTHORIZATION']) < 1){
     $response = new Response();
     $response->setHttpStatuseCode(401);
     $response->setSuccess(false);
-    (!isset($_SERVER['HTTP_AUTHORIZATION'])? $response->addMessage("Access token is missing from the header."):false);
-    (strlen($_SERVER['HTTP_AUTHORIZATION'])<1 ? $response->addMessage("The authorization token used is invalid."): false);
+    (!isset($_SERVER['HTTP_AUTHORIZATION']) ? $response->addMessage("Access token is missing from the header.") : false);
+    (strlen($_SERVER['HTTP_AUTHORIZATION']) < 1 ? $response->addMessage("Access token cannot be blank.") : false);
     $response->send();
+    exit;
   }
 
   $accesstoken = $_SERVER['HTTP_AUTHORIZATION'];
 
-  if($_SERVER['REQUEST_METHOD']==='DELETE'){
+
+  if($_SERVER['REQUEST_METHOD'] === 'DELETE'){
 
     try{
-      $query = $writeDB->prepare('delete from table_sessions where id= :sessionid and accesstoken = :accesstoken');
+      $query = $writeDB->prepare('DELETE from table_sessions where id = :sessionid and accesstoken = :accesstoken');
       $query->bindParam(':sessionid', $sessionID, PDO::PARAM_INT);
       $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
       $query->execute();
@@ -59,8 +62,8 @@ if(array_key_exists("sesionid", $_GET)){
       $returnData['session_id'] = intval($sessionID);
 
       $response = new Response();
-      //$response->setHttpStatuseCode(200);
-      $response->setSuccess(True);
+      $response->setHttpStatuseCode(200);
+      $response->setSuccess(true);
       $response->addMessage("Successfully logged out.");
       $response->setData($returnData);
       $response->send();
@@ -74,6 +77,157 @@ if(array_key_exists("sesionid", $_GET)){
     }
 
   }elseif($_SERVER['REQUEST_METHOD'] === 'PATCH'){
+
+    //we are using PATCH here for refreshing. Not edit.
+
+    if($_SERVER['CONTENT_METHOD']!== 'application/json'){
+      $response = new Response();
+      $response->setHttpStatuseCode(400);
+      $response->setSuccess(false);
+      $response->addMessage("Content header not set to json.");
+      $response->send();
+    }
+    //Getting the json data passed 
+    $rawPatchData = file_get_contents('php://input');
+
+    if(!$jsonData = json_decode($rawPatchData)){
+      $response = new Response();
+      $response->setHttpStatuseCode(404);
+      $response->setSuccess(false);
+      $response->addMessage("Passed in data is not a valid json format");
+      $response->send();
+    }
+
+    if(!isset($jsonData->refresh_token) || strlen($jsonData->refresh_token) <1){
+      $response = new Response();
+      $response->setHttpStatuseCode(400);
+      $response->setSuccess(false);
+      (!isset($jsonData->refresh_token)? $response->addMessage("Refresh token not provided."):false);
+      (strlen($jsonData->refresh_token) <1 ? $response->addMessage("Refresh token cannot be empty"):false);    
+      $response->send();  
+    }
+
+    //Now creating and executing database queries under try catch
+    try{
+      $refreshtoken = $jsonData->refresh_token;
+
+      $query = $writeDB->prepare("select table_sessions.id as sessionid, table_sessions.userid as userid, accesstoken, refreshtoken, useractive, 
+                  loginattempts, accesstokenexpiry, refreshtokenexpiry from table_sessions and table_users where
+                  table_users.id = table_sessions.userid and table_sessions.id =:sessionid and table_sessions.accesstoke = 
+                  :accesstoken and table_sessions.refreshtoken = :refreshtoken");
+      $query->bindParam(':sessionid', $sessionID, PDO::PARAM_INT);
+      $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
+      $query->bindParam(':refreshtoken', $refreshtoken, PDO::PARAM_STR);
+
+      $rowCount = $query->rowCount();
+
+      if($rowCount === 0){
+        $response = new Response();
+        $response->setHttpStatuseCode(401);
+        $response->setSuccess(false);
+        $response->addMessage("Access or Refresh token is incorrect for the session id");
+        $response->send();  
+      }
+
+      $row = $query->fetch(PDO::FETCH_ASSOC);
+
+      $returned_sessionid = $row['sessionid'];
+      $returned_userid = $row['userid'];
+      $returned_accesstoken = $row['accesstoken'];
+      $returned_refreshtoken = $row['refreshtoken'];
+      $returned_useractive = $row['useractive'];
+      $returned_loginattempts = $row['loginattempts'];
+      $returned_accesstokenexpiry = $row['accesstokenexpiry'];
+      $returned_refreshtokenexpiry = $row['refreshtokenexpiry'];
+
+      if($returned_useractive !== 'Y'){
+        $response = new Response();
+        $response->setHttpStatuseCode(401);
+        $response->setSuccess(false);
+        $response->addMessage("This user account is inactive.");
+        $response->send();
+      }
+
+      if($returned_loginattempts >= 3){
+        $response = new Response();
+        $response->setHttpStatuseCode(401);
+        $response->setSuccess(false);
+        $response->addMessage("The user is currently locked out.");
+        $response->send();
+      }
+      //Checking to see if the refresh token expiry time is a future time
+      //or if it has expired. If it is less than the now, then it has 
+      //expired.
+      if(strtotime($returned_refreshtokenexpiry)<time()){
+        $response = new Response();
+        $response->setHttpStatuseCode(401);
+        $response->setSuccess(false);
+        $response->addMessage("Sorry the refresh token provided has expired.");
+        $response->send();
+      }
+
+      $accesstoken = base64_encode(bin2hex(openssl_random_pseudo_bytes(24)).time());
+  
+      // generate refresh token
+      // use 24 random bytes to generate a refresh token then encode this as base64
+      // suffix with unix time stamp to guarantee uniqueness (stale tokens)
+      $refreshtoken = base64_encode(bin2hex(openssl_random_pseudo_bytes(24)).time());
+  
+
+      $access_token_expiry_seconds = 1200;
+      $refresh_token_expiry_seconds = 1209600;
+
+      $query = $writeDB->prepare('update table_sessions set accesstoken = :accesstoken, 
+            accesstokenexpiry = date_add(NOW(),INTERVAL :accesstokenexpiryseconds SECOND) refreshtoken =:refreshtoken, 
+            refreshtokenexpiry = date_add(NOW(), INTERVAL :refreshtokenexpirysecond SECOND) where id =:sessionid and 
+            userid =:userid and accesstoken =:returnedaccesstoken and refreshtoken =:returnedrefreshtoken');
+      
+      $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
+      $query->bindParam(':sessionid', $returned_sessionid, PDO::PARAM_INT);
+      $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
+      $query->bindParam(':accesstokenexpirysecond', $access_token_expiry_seconds, PDO::PARAM_INT);
+      $query->bindParam(':refreshtoken', $refreshtoken, PDO::PARAM_STR);
+      $query->bindParam(':refreshtokenexpiry', $refresh_token_expiry_seconds, PDO::PARAM_STR);
+      $query->bindParam(':returnedaccesstoken', $returned_accesstoken, PDO::PARAM_STR);
+      $query->bindParam(':returnedrefreshtoken', $returned_refreshtoken, PDO::PARAM_STR);
+      $query->execute();
+
+      $rowCount = $query->rowCount();
+
+      if($rowCount === 0){
+        $response = new Response();
+        $response->setHttpStatuseCode(401);
+        $response->setSuccess(false);
+        $response->addMessage("Access token could not be refreshed- please log in again.");
+        $response->send();
+      }
+
+      $returnData = array();
+      $returnData['session_id'] = $returned_session;
+      $returnData['access_token'] = $accesstoken;
+      $returnData['access_token_expiry'] = $access_token_expiry_seconds;
+      $returnData['refresh_token'] = $refreshtoken;
+      $returnData['refresh_token_expiry'] = $refresh_token_expiry_seconds;
+      
+      $response = new Response();
+      $response->setHttpStatuseCode(401);
+      $response->setSuccess(false);
+      $response->setData($returnData);
+      $response->addMessage("Server or query error ".$ex);
+      $response->send();
+
+
+
+
+    }catch(PDOException $ex){
+      $response = new Response();
+      $response->setHttpStatuseCode(401);
+      $response->setSuccess(false);
+      $response->addMessage("Server or query error ".$ex);
+      $response->send();
+    }
+
+
 
   }else{
     $response = new Response();
@@ -99,7 +253,7 @@ if(array_key_exists("sesionid", $_GET)){
 
   if($_SERVER['CONTENT_TYPE'] !== 'application/json'){
     $response = new Response();
-    $response->setHttpStatuseCode(400);
+     $response->setHttpStatuseCode(400);
     $response->setSuccess(false);
     $response->addMessage("Request content type header is not application/json");
     $response->send();
@@ -144,68 +298,7 @@ if(array_key_exists("sesionid", $_GET)){
 
     try{
 
-      // $username = $jsonData->username;
-      // $password = $jsonData->password;
-
-      // $query = $writeDB->prepare('select id, fullname, username, password, useractive, loginattempts from table_users where username = :username');
-      // $query->bindParam(':username', $username, PDO::FETCH_ASSOC);
-      // $query->execute();
-
-      // $rowCount = $query->rowCount();
-
-      // if($rowCount === 0){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(401);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Username or passeord incorrect");
-      //   exit();
-      // }
-
-      // $row = $query->fetch(PDO::FETCH_ASSOC);
-
-      // $returned_id = $row['id'];
-      // $returned_fullname = $row['fullname'];
-      // $returned_username = $row['username'];
-      // $returned_password = $row['password'];
-      // $returned_useractive = $row['useractive'];
-      // $returned_loginattempts = $row['loginattempts'];
-
-      // if($returned_useractive !== 'Y'){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(401);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("user account not active");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // if($returned_loginattempts >= 3){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(401);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("User account is currently active.");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // if(!password_verify($password, $returned_password)){
-      //   $query = $writeDB->prepare('update table_users set loginattempts = loginattempts+1 where id =:id');
-      //   $query->bindParam(':id', $returned_id, PDO::FETCH_ASSOC);
-      //   $query->execute();
-
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(401);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Username or password incorrect.");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // $accessToken = base64_encode(bin2hex(openssl_random_pseudo_bytes(24)).time());
-      // $refreshtoken = base64_encode(bin2hex(openssl_random_pseudo_bytes(24)).time());
-
-      // $access_token_expiry_seconds = 1200;
-      // $refresh_token_expiry_seconds = 1209600;
+    
 
       $username = $jsonData->username;
       $password = $jsonData->password;
@@ -357,7 +450,7 @@ if(array_key_exists("sesionid", $_GET)){
 }else{
   $response = new Response();
   $response->setHttpStatuseCode(404);
-  $respnse->setSuccess(false);
+  $response->setSuccess(false);
   $response->addMessage("You are trying to access a non-existing endpoint.");
   $response->send();
 }
