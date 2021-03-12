@@ -14,6 +14,8 @@ try{
   $response->send();
 }
 
+//Begin auth 
+
 if(array_key_exists("sessionid", $_GET)){
 
   $sessionID = $_GET['sessionid'];
@@ -173,21 +175,6 @@ if(array_key_exists("sessionid", $_GET)){
 
       $access_token_expiry_seconds = 1200;
       $refresh_token_expiry_seconds = 1209600;
-
-      // $query = $writeDB->prepare('update table_sessions set accesstoken = :accesstoken, 
-      //       accesstokenexpiry = date_add(NOW(),INTERVAL :accesstokenexpiryseconds SECOND) refreshtoken =:refreshtoken, 
-      //       refreshtokenexpiry = date_add(NOW(), INTERVAL :refreshtokenexpirysecond SECOND) where id =:sessionid and 
-      //       userid =:userid and accesstoken =:returnedaccesstoken and refreshtoken =:returnedrefreshtoken');
-      
-      // $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
-      // $query->bindParam(':sessionid', $returned_sessionid, PDO::PARAM_INT);
-      // $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
-      // $query->bindParam(':accesstokenexpirysecond', $access_token_expiry_seconds, PDO::PARAM_INT);
-      // $query->bindParam(':refreshtoken', $refreshtoken, PDO::PARAM_STR);
-      // $query->bindParam(':refreshtokenexpiry', $refresh_token_expiry_seconds, PDO::PARAM_STR);
-      // $query->bindParam(':returnedaccesstoken', $returned_accesstoken, PDO::PARAM_STR);
-      // $query->bindParam(':returnedrefreshtoken', $returned_refreshtoken, PDO::PARAM_STR);
-      // $query->execute();
 
         // create the query string to update the current session row in the sessions table and set the token and refresh token as well as their expiry dates and times
         $query = $writeDB->prepare('update table_sessions set accesstoken = :accesstoken, accesstokenexpiry = 
