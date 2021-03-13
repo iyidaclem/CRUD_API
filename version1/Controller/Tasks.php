@@ -26,28 +26,30 @@ if(!isset($_SERVER['HTTP_AUTHORIZATION']) || strlen($_SERVER['HTTP_AUTHORIZATION
   (!isset($_SERVER['HTTP_AUTHORIZATION'])? $response->addMessage("Access token is missing."): false);
   strlen($_SERVER['HTTP_AUTHORIZATION'])<1 ? $response->addMessage("Access token is empty"):false;
   $response->send();
+  exit();
 }
 
+$accesstoken = $_SERVER['HTTP_AUTHORIZATION'];
 
 //auth script ends
 try{
-  $accesstoken = $_SERVER['HTTP_AUTHORIZATION'];
 
   $query = $writeDB->prepare('select userid, accesstokenexpiry, useractive, loginattempts
             from table_sessions, table_users where table_sessions.userid = table_users.id 
-            and accesstoke=:accesstoken');
+            and accesstoken=:accesstoken');
   $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
-  $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
+  $query->execute();
+  //$query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
 
   $rowCount = $query->rowCount();
 
   if($rowCount === 0){
     $response = new Response();
-    $response->setHttpStatuseCode(400);
+    $response->setHttpStatuseCode(401);
     $response->setSuccess(false);
-    $response->addMessage("Task Id cannot be blank and must be numerica.");
+    $response->addMessage("Invalide access token.");
     $response->send();
-    exit;
+    
   }
   $row = $query->fetch(PDO::FETCH_ASSOC);
 
@@ -74,7 +76,7 @@ try{
     exit();
   }
 
-  if(strlen($returned_accesstokenexpiry) < time()){
+  if(strlen($returned_accesstokenexpiry) > time()){
     $response = new Response();
     $response->setHttpStatuseCode(401);
     $response->setSuccess(false);
@@ -204,149 +206,6 @@ if(array_key_exists("taskid", $_GET)){
       exit();
     }
   }elseif($_SERVER['REQUEST_METHOD'] === 'PATCH'){
-    // try{
-
-    //    if($_SERVER['CONTENT_TYPE'] !== 'application/json'){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(400);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Content type header not set to Json.");
-      //   $response->send();
-      //   exit();
-      // }
-      // $rawPatchData = file_get_contents('php://input');
-
-      // if(!$jsonData = json_decode($rawPatchData)){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(400);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Request body not a valid json");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // $title_updated = false;
-      // $description_updated = false;
-      // $deadline_updated = false;
-      // $completed_updated = false;
-
-      // $patch_queryFields = "";
-
-      // if(isset($jsonData->title)){
-      //   $title_updated = true;
-      //   $patch_queryFields .= "title = :title, ";
-      // }
-      // if(isset($jsonData->description)){
-      //   $description_updated = true;
-      //   $patch_queryFields .= "descript = :descript, ";
-      // }
-      // if(isset($jsonData->deadline)){
-      //   $title_updated = true;
-      //   $patch_queryFields .= "deadline = STR_TO_DATE(:deadline, '%d/%m/%Y %H:%i'),";
-      // }
-      // if(isset($jsonData->completed)){
-      //   $completed_updated = true;
-      //   $patch_queryFields .= "completed = :completed, ";
-      // }
-
-      // $patch_queryFields = rtrim($patch_queryFields, ", ");
-
-      // if( $title_updated === false && $description_updated === false && $deadline_updated === false && $completed_updated === false){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(400);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("No tasks fields provided.");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // $query = $writeDB->prepare('SELECT id, title, descript, DATE_FORMAT(:deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id =:taskid');
-      // $query->bindParam(':taskid', $taskid, PDO::PARAM_INT);
-      // $query->execute();
-
-      // $rowCount = $query->rowCount();
-
-      // if($rowCount === 0){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(400);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Failed to update ".$ex->getMessage());
-      //   $response->send();
-      //   exit();
-      // }
-
-      // while($row = $query->fetch(PDO::FETCH_ASSOC)){
-      //   $task = new Task($row['id'],$row['title'],$row['descript'], $row['deadline'], $row['completed']);
-      // }
-      // $queryString = "UPDATE table_tasks set ".$patch_queryFields." where id=:taskid";
-      // $query = $writeDB->prepare($queryString);
-
-      // if($title_updated === true){
-      //   $task->setTitle($jsonData->title);
-      //   $up_title = $task->getTitle();
-      //   $query->bindParam(':title', $up_title, PDO::PARAM_STR);
-      // }
-      // if($description_updated === true){
-      //   $task->setDescription($jsonData->description);
-      //   $up_description = $task->getDescription();
-      //   $query->bindParam(':descript', $up_title, PDO::PARAM_STR);
-      // }
-      // if($deadline_updated === true){
-      //   $task->setDeadline($jsonData->deadline);
-      //   $up_deadline = $task->getDeadline();
-      //   $query->bindParam(':deadline', $up_deadline, PDO::PARAM_STR);
-      // }
-      // if($completed_updated === true){
-      //   $task->setCompleted($jsonData->completed);
-      //   $up_completed = $task->getComplete();
-      //   $query->bindParam(':completed', $up_completed, PDO::PARAM_STR);
-      // }
-
-      // $query->bindParam(':taskid', $taskid, PDO::PARAM_INT);
-      // $query->execute();
-
-      // $rowCount = $query->rowCount();
-      
-      // if($rowCount === 0){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(400);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Task not update");
-      //   $response->send();
-      //   exit();
-      // }
-      // $query = $writeDB->prepare('SELECT id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id =:taskid');
-      // $query->bindParam(':taskid',$taskid, PDO::PARAM_INT);
-      // $query->execute();
-
-      // $rowCount = $query->rowCount();
-
-      // if($rowCount === 0){
-      //   $response = new Response();
-      //   $response->setHttpStatuseCode(404);
-      //   $response->setSuccess(false);
-      //   $response->addMessage("Updated task not found.");
-      //   $response->send();
-      //   exit();
-      // }
-
-      // $taskArray = array();
-      // while($row = $query->fetch(PDO::FETCH_ASSOC)){
-      //   $task = new Task($row['id'], $row['title'], $row['descript'], $row['deadline'], $row['completed']);
-      //   $taskArray = $task->returnTaskArray();
-      // }
-
-      // $returnData = array();
-      // $returnData['rows_returned'] = $rowCount;
-      // $returnData['tasks'] = $taskArray;
-      
-      // $response = new Response();
-      // $response->setHttpStatuseCode(200);
-      // $response->setSuccess(true);
-      // $response->addMessage("Task updated");
-      // $response->setData($returnData);
-      // $response->send();
-      // $exit();
 
        // update task
     try {
@@ -429,8 +288,9 @@ if(array_key_exists("taskid", $_GET)){
       }
       // ADD AUTH TO QUERY
       // create db query to get task from database to update - use master db
-      $query = $writeDB->prepare('SELECT id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id = :taskid');
+      $query = $writeDB->prepare('SELECT id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id = :taskid and userid=:userid');
       $query->bindParam(':taskid', $taskid, PDO::PARAM_INT);
+      $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
       $query->execute();
 
       // get row count
@@ -752,6 +612,7 @@ elseif(empty($_GET)){
     try{
       $query = $readDB->prepare('select id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where userid=:userid');
       $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
+      $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
       $query->execute();
 
       $rowCount = $query->rowCount();
@@ -839,12 +700,13 @@ elseif(empty($_GET)){
       $deadline = $newTask->getDeadline();
       $completed = $newTask->getComplete();
 
-      $query = $writeDB->prepare('insert into table_tasks (title, descript, deadline, completed) 
-                values(:title, :descript, STR_TO_DATE(:deadline, \'%d/%m/%Y %H:%i\'), :completed)');
+      $query = $writeDB->prepare('insert into table_tasks (title, descript, deadline, completed, userid) 
+                values(:title, :descript, STR_TO_DATE(:deadline, \'%d/%m/%Y %H:%i\'), :completed, :userid)');
       $query->bindParam(':title', $title, PDO::PARAM_STR);
       $query->bindParam(':descript', $description, PDO::PARAM_STR);
       $query->bindParam(':deadline', $deadline, PDO::PARAM_STR);
       $query->bindParam(':completed', $completed, PDO::PARAM_STR);
+      $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
       $query->execute();
 
       $rowCount = $query->rowCount();
@@ -859,8 +721,9 @@ elseif(empty($_GET)){
       }
       $lastInsertId = $writeDB->lastInsertId();
 
-      $query = $writeDB->prepare('SELECT id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id = :taskid');
+      $query = $writeDB->prepare('SELECT table_tasks.id as id, title, descript, DATE_FORMAT(deadline, "%d/%m/%Y %H:%i") as deadline, completed from table_tasks where id = :taskid and userid=:userid');
       $query->bindParam(':taskid', $lastInsertId, PDO::PARAM_INT);
+      $query->bindParam(':userid', $returned_userid, PDO::PARAM_INT);
       $query->execute();
 
       $rowCount = $query->rowCount();
@@ -873,13 +736,16 @@ elseif(empty($_GET)){
         exit();
       }
       $taskArray = array();
+      
       while($row = $query->fetch(PDO::FETCH_ASSOC)){
-        $task = new Task($row['id'],$row['title'], $row['descript'], $row['deadline'],$row['completed']);
+        $task = new Task($row['id'], $row['title'], $row['descript'], $row['deadline'],$row['completed']);
         $taskArray[] = $task->returnTaskArray();
+      
       }
       $returnData = array();
       $returnData['rows_returned'] = $rowCount;
       $returnData['tasks'] = $taskArray;
+      $returnData['taskid'] =   $lastInsertId;
 
       $response = new Response();
       $response->setHttpStatuseCode(201);
@@ -888,9 +754,6 @@ elseif(empty($_GET)){
       $response->setData($returnData);
       $response->send();
       exit();
-
-
-
 
 
     }

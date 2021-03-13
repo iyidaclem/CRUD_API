@@ -40,43 +40,49 @@ if(array_key_exists("sessionid", $_GET)){
   }
 
   $accesstoken = $_SERVER['HTTP_AUTHORIZATION'];
+    if($_SERVER['REQUEST_METHOD'] === 'DELETE'){
 
+      try {
+        // create db query to delete session where access token is equal to the one provided (leave other sessions active)
+        // doesn't matter about if access token has expired as we are deleting the session
+        $query = $writeDB->prepare('delete from table_sessions where id = :sessionid and accesstoken = :accesstoken');
+        $query->bindParam(':sessionid', $sessionID, PDO::PARAM_INT);
+        $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
+        $query->execute();
 
-  if($_SERVER['REQUEST_METHOD'] === 'DELETE'){
+        // get row count
+        $rowCount = $query->rowCount();
 
-    try{
-      $query = $writeDB->prepare('DELETE from table_sessions where id = :sessionid and accesstoken = :accesstoken');
-      $query->bindParam(':sessionid', $sessionID, PDO::PARAM_INT);
-      $query->bindParam(':accesstoken', $accesstoken, PDO::PARAM_STR);
-      $query->execute();
+        if($rowCount === 0) {
+          // set up response for unsuccessful log out response
+          $response = new Response();
+          $response->setHttpStatuseCode(400);
+          $response->setSuccess(false);
+          $response->addMessage("Failed to log out of this session using access token provided");
+          $response->send();
+          exit;
+        }
 
-      $rowCount = $query->rowCount();
+        // build response data array which contains the session id that has been deleted (logged out)
+        $returnData = array();
+        $returnData['session_id'] = intval($sessionID);
 
-      if($rowCount === 0){
+        // send successful response for log out
+        $response = new Response();
+        $response->setHttpStatuseCode(200);
+        $response->setSuccess(true);
+        $response->setData($returnData);
+        $response->send();
+        exit;
+      }
+      catch(PDOException $ex) {
         $response = new Response();
         $response->setHttpStatuseCode(500);
         $response->setSuccess(false);
-        $response->addMessage("Failed to log out session using the access token provided.");
+        $response->addMessage("There was an issue logging out - please try again");
         $response->send();
+        exit;
       }
-
-      $returnData = array();
-      $returnData['session_id'] = intval($sessionID);
-
-      $response = new Response();
-      $response->setHttpStatuseCode(200);
-      $response->setSuccess(true);
-      $response->addMessage("Successfully logged out.");
-      $response->setData($returnData);
-      $response->send();
-
-    }catch(PDOException $ex){
-      $response = new Response();
-      $response->setHttpStatuseCode(500);
-      $response->setSuccess(false);
-      $response->addMessage("There was a problem loggin out, please try again.");
-      $response->send();
-    }
 
   }elseif($_SERVER['REQUEST_METHOD'] === 'PATCH'){
 
